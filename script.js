@@ -701,6 +701,15 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
       setText("trendCaption", latestMonthName + " " + latestYear + ": " + IDR.format(latestValue) + " · Forecast " + nextMonthShort + " " + growthText);
       setText("chipForecast", forecastTitle + " " + growthText);
       setText("footerForecast", forecastTitle);
+      const trendMove = growthPct > 0
+        ? "Tren historis menunjukkan lonjakan musiman (seasonality) pada kuartal ketiga. "
+        : growthPct < 0
+          ? "Tren historis tidak menunjukkan lonjakan musiman. "
+          : "Tren historis menunjukkan pergerakan yang datar. ";
+      const trendOutlook = growthPct === 0
+        ? "Prediksi Holt-Winters mengindikasikan momentum pertumbuhan yang datar bulan depan."
+        : "Prediksi Holt-Winters mengindikasikan momentum pertumbuhan " + (growthPct > 0 ? "positif" : "negatif") + " bulan depan.";
+      setText("trendLead", trendMove + trendOutlook);
       setText("brandWindow", "Omset tiap merek pada 2024, 2025, dan " + latestYear + " (sampai " + latestMonthName + ").");
       setText("stockWindow", "Diurutkan dari rata-rata omset bulanan tertinggi pada " + currentRange + ". Buff Stok 3M (pcs) = ((rata-rata omset 3 bulan terakhir + omset bulan tertinggi 12 bulan) / 2) × 3, dibagi harga rata-rata per pcs.");
       setText("promoWindow", "Omset 12 bulan terakhir (" + currentRange + ") dibanding 12 bulan sebelumnya (" + priorRange + "). Hanya item yang masih terjual dan turun, diurutkan dari penurunan paling tajam.");
