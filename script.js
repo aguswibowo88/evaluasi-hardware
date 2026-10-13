@@ -384,7 +384,7 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
       return Number.isFinite(number) ? number : 0;
     }
 
-    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTfecADJc1sJ1H7JBFhqDhvQNdJ7AlDr-PQbD4LEERvEbK9fJXCYTtRl003F_kjkhYyJLaX480p8A_E/pub?output=csv";
+    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7qoh1IPk8xqANOa5lsMr3dQz4izqXUuGjWp8KFGEuCF9wGZn5L-_u-xJjCCijN4u5qTlsEySdoHkU/pub?output=csv";
 
     let sheetCsvPromise = null;
 
