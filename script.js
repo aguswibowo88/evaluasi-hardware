@@ -330,7 +330,14 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
     }
 
     function platformShortName(name) {
-      return String(name || "").trim();
+      const text = String(name || "").trim();
+      const key = text.toUpperCase();
+      if (key.includes("BANGUN INDAH GRAHA MALANG")) return "BIG MLG";
+      if (key.includes("MITRA 10 SURABAYA")) return "Mitra 10 SBY";
+      if (key.includes("VISI CAKRAWALA")) return "Visi Cakrawala";
+      if (key.includes("ADIPUTRO TULUNGAGUNG")) return "Adiputro TLA";
+      if (key.includes("ADIPUTRO KEDIRI")) return "Adiputro KDR";
+      return text;
     }
 
     function isNamedBrand(name) {
@@ -487,7 +494,7 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
         });
 
       const sentRows = rows.filter((row) => row.status === "DIKIRIM");
-      const byPlatform = [...topSumAll(sentRows, (row) => row.platform).entries()]
+      const byPlatform = [...topSumAll(sentRows, (row) => platformShortName(row.platform)).entries()]
         .filter((item) => item[0] && item[1] > 0)
         .sort((a, b) => b[1] - a[1]);
       const platformTotal = byPlatform.reduce((sum, item) => sum + item[1], 0);

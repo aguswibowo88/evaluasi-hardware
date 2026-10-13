@@ -239,7 +239,7 @@ function buildKpis(parsed) {
     }).sort((a, b) => b.revenue - a.revenue);
   }
 
-  const platform = ranked((row) => row.platform);
+  const platform = ranked((row) => platformLabel(row.platform));
   const brand = ranked((row) => row.brand).map((item, index) => ({ ...item, rank: index + 1 }));
   const brandYearMap = new Map();
   rows.forEach((row) => {
@@ -435,8 +435,8 @@ async function loadKpis() {
 
 function systemPrompt() {
   return [
-    "You are an E-Commerce Data Analyst.",
-    "Use ONLY the provided backend data. Do not make up numbers.",
+    "You are a Hardware sales data analyst.",
+    "Use ONLY the provided backend data from the hardware Google Sheet. Do not make up numbers.",
     "Differentiate between factual data and hypothesis.",
     `If data is insufficient to explain a "why", you MUST state: "${INSUFFICIENT}"`,
     "Write the answer in Bahasa Indonesia.",
@@ -568,6 +568,11 @@ function directSalesAnswer(question, kpis) {
 
 function platformLabel(name) {
   const text = String(name || "").toUpperCase();
+  if (text.includes("BANGUN INDAH GRAHA MALANG")) return "BIG MLG";
+  if (text.includes("MITRA 10 SURABAYA")) return "Mitra 10 SBY";
+  if (text.includes("VISI CAKRAWALA")) return "Visi Cakrawala";
+  if (text.includes("ADIPUTRO TULUNGAGUNG")) return "Adiputro TLA";
+  if (text.includes("ADIPUTRO KEDIRI")) return "Adiputro KDR";
   if (text.includes("SHOPEE")) return "Shopee";
   if (text.includes("TOKOPEDIA")) return "Tokopedia";
   if (text.includes("SEMERU")) return "Mitra Semeru";
@@ -580,7 +585,7 @@ function platformLabel(name) {
 
 function answerPrompt() {
   return [
-    "You are an E-Commerce Data Analyst.",
+    "You are a Hardware sales data analyst.",
     "Answer only the user's question in a detailed, conversational Bahasa Indonesia response.",
     "Use ONLY the provided backend data. Do not make up numbers.",
     "Do not return JSON and do not write a structured report.",
