@@ -156,7 +156,7 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
           labels: platforms.map((p) => p.name + " " + p.pct + "%"),
           datasets: [{
             data: platforms.map((p) => p.pct),
-            backgroundColor: ["#D4AF37", "#2DD4BF", "#64748B"],
+            backgroundColor: ["#D4AF37", "#2DD4BF", "#64748B", "#0369A1", "#C2410C", "#7C3AED", "#94A3B8"],
             borderColor: "#FFFFFF",
             borderWidth: 3,
             hoverOffset: 8,
@@ -330,15 +330,12 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
     }
 
     function platformShortName(name) {
-      const text = String(name || "").toUpperCase();
-      if (text.includes("SHOPEE")) return "Shopee";
-      if (text.includes("TOKOPEDIA")) return "Tokopedia";
-      if (text.includes("SEMERU")) return "Mitra Semeru";
-      if (text.includes("ALFA")) return "Alfa Gift";
-      if (text.includes("BERHASIL")) return "Berhasil Tumbuh";
-      if (text.includes("LAZADA")) return "Lazada";
-      if (text.includes("BLIBLI")) return "Blibli";
-      return name;
+      return String(name || "").trim();
+    }
+
+    function isNamedBrand(name) {
+      const text = String(name || "").trim();
+      return Boolean(text) && !/^\(blank\)$/i.test(text);
     }
 
     function parseSheetCsv(source) {
@@ -456,12 +453,9 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
       const qtyIndex = header.findIndex((name) => name.includes("QTY"));
       if ([yearIndex, monthIndex, platformIndex, statusIndex, revenueIndex].some((index) => index < 0)) return;
 
-      const openLabels = new Set(labels.filter((_, index) => actual[index] == null));
       const horizon = labelOrder(labels[labels.length - 1] || "");
       const monthSums = new Map();
       const rows = [];
-      const brandAdd = new Map();
-      const platformAdd = new Map();
       table.slice(1).forEach((line) => {
         const year = Number(line[yearIndex]);
         const month = String(line[monthIndex] || "").trim();
@@ -477,15 +471,6 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
         if (status !== "DIKIRIM" || !year) return;
         if (!label) return;
         monthSums.set(label, (monthSums.get(label) || 0) + amount);
-        if (!openLabels.has(label) && labelOrder(label) <= horizon) return;
-        const brandName = brand.toUpperCase();
-        const slot = brandName.includes("BANANA") ? 0 : brandName.includes("INTUITION") ? 1 : brandName.includes("SCHICK") ? 2 : brandName.includes("FREEMAN") ? 3 : -1;
-        if (slot >= 0) {
-          if (!brandAdd.has(year)) brandAdd.set(year, [0, 0, 0, 0]);
-          brandAdd.get(year)[slot] += amount;
-        }
-        const shortPlatform = platformShortName(platform);
-        platformAdd.set(shortPlatform, (platformAdd.get(shortPlatform) || 0) + amount);
       });
       window.SHEET_ROWS = rows;
 
@@ -501,44 +486,69 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
           forecast.push(null);
         });
 
-      brandAdd.forEach((amounts, year) => {
-        const series = brandYearSeries[String(year)];
-        if (!series) return;
-        amounts.forEach((amount, slot) => {
-          if (!amount) return;
-          series[slot] = Math.round((series[slot] + amount / 1e9) * 1000) / 1000;
+      const sentRows = rows.filter((row) => row.status === "DIKIRIM");
+      const byPlatform = [...topSumAll(sentRows, (row) => row.platform).entries()]
+        .filter((item) => item[0] && item[1] > 0)
+        .sort((a, b) => b[1] - a[1]);
+      const platformTotal = byPlatform.reduce((sum, item) => sum + item[1], 0);
+      const shownPlatforms = byPlatform.slice(0, 6);
+      const restPlatform = platformTotal - shownPlatforms.reduce((sum, item) => sum + item[1], 0);
+      platforms.length = 0;
+      shownPlatforms.forEach(([name, value]) => {
+        platforms.push({
+          name,
+          value,
+          pct: platformTotal ? Math.round((value / platformTotal) * 100) : 0,
         });
       });
-      const brandAdded = brandAdd.get(2026) || [0, 0, 0, 0];
-      platformAdd.forEach((amount, name) => {
-        const platform = platforms.find((item) => item.name === name);
-        if (platform) platform.value += amount;
-      });
-      const platformTotal = platforms.reduce((sum, item) => sum + item.value, 0);
-      platforms.forEach((item) => {
-        item.pct = platformTotal ? Math.round((item.value / platformTotal) * 100) : 0;
-      });
+      if (restPlatform > 0) {
+        platforms.push({
+          name: "Lainnya",
+          value: restPlatform,
+          pct: platformTotal ? Math.round((restPlatform / platformTotal) * 100) : 0,
+        });
+      }
       const pctGap = 100 - platforms.reduce((sum, item) => sum + item.pct, 0);
-      if (pctGap && platforms.length) platforms[0].pct += pctGap;
-      brands.forEach((item) => {
-        const slot = item.name === "Banana Boat" ? 0 : item.name === "Intuition" ? 1 : item.name === "Schick" ? 2 : -1;
-        if (slot < 0 || !brandAdded[slot]) return;
-        item.value += brandAdded[slot];
-        item.value_miliar = Math.round((item.value / 1e9) * 100) / 100;
-        item.label = miliarLabel(item.value);
+      if (pctGap && platforms.length) platforms[platforms.length - 1].pct += pctGap;
+      const byBrand = [...topSumAll(sentRows, (row) => (isNamedBrand(row.brand) ? row.brand : "")).entries()]
+        .filter((item) => item[0] && item[1] > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3);
+      brands.length = 0;
+      byBrand.forEach(([name, value]) => {
+        brands.push({
+          name,
+          value,
+          value_miliar: Math.round((value / 1e9) * 100) / 100,
+          label: miliarLabel(value),
+        });
       });
-      if (D.top_platform && /shopee/i.test(D.top_platform.name)) {
-        D.top_platform.value += platformAdd.get("Shopee") || 0;
-        D.top_platform.label = miliarLabel(D.top_platform.value);
-        setText("topPlatformValue", D.top_platform.label);
-      }
-      if (D.top_brand && /banana/i.test(D.top_brand.name)) {
-        D.top_brand.value += brandAdded[0];
-        D.top_brand.label = miliarLabel(D.top_brand.value);
-        setText("topBrandValue", D.top_brand.label);
-      }
+      const brandYears = [...new Set(sentRows.map((row) => row.year).filter((year) => year))].sort((a, b) => a - b).slice(-3);
+      const brandTotals = new Map();
+      sentRows.forEach((row) => {
+        if (!isNamedBrand(row.brand) || !brandYears.includes(row.year)) return;
+        if (!brandTotals.has(row.brand)) brandTotals.set(row.brand, new Map());
+        const years = brandTotals.get(row.brand);
+        years.set(row.year, (years.get(row.year) || 0) + row.amount);
+      });
+      const rankedBrands = [...brandTotals.entries()]
+        .map(([name, years]) => ({
+          name,
+          total: brandYears.reduce((sum, year) => sum + (years.get(year) || 0), 0),
+        }))
+        .filter((item) => item.total > 0)
+        .sort((a, b) => b.total - a.total);
+      brandYearLabels.length = 0;
+      rankedBrands.forEach((item) => brandYearLabels.push(item.name));
+      Object.keys(brandYearSeries).forEach((key) => { delete brandYearSeries[key]; });
+      brandYears.forEach((year) => {
+        brandYearSeries[String(year)] = rankedBrands.map((item) => Math.round((((brandTotals.get(item.name).get(year) || 0) / 1e9) * 1000)) / 1000);
+      });
       setText("platformCaption", platforms.map((item) => item.name + " " + item.pct + "%").join(" · "));
       setText("brandCaption", brands.map((item) => item.name + " " + String(item.value_miliar).replace(".", ",") + "M").join(" · "));
+      if (platforms[0] && brands[0]) {
+        setText("channelLead", platforms[0].name + " merupakan kontributor saluran terbesar. Portofolio merek dipimpin oleh " + brands[0].name + ".");
+      }
       publishLatestPeriod(rows, monthSums);
     }
 
@@ -737,7 +747,8 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
       const juta = Math.round(forecastValue / 1e6).toLocaleString("id-ID");
       const itemName = topItem ? topItem[0] : "item unggulan";
       const move = growthPct >= 0 ? "lonjakan" : "pergerakan";
-      setText("insightBody0", "Alokasi Budget Marketing: Mengingat prediksi " + move + " omset ke Rp " + juta + " Juta di bulan " + nextMonthName + ", tingkatkan budget ads di Shopee khusus untuk produk " + itemName + ".");
+      const channelName = topPlatform ? topPlatform[0] : "kanal utama";
+      setText("insightBody0", "Alokasi Budget Marketing: Mengingat prediksi " + move + " omset ke Rp " + juta + " Juta di bulan " + nextMonthName + ", tingkatkan budget ads di " + channelName + " khusus untuk produk " + itemName + ".");
       const overlap = declines.filter((item) => item.overlap).map((item) => item.name);
       const overlapText = overlap.length ? " Utamakan " + overlap.join(", ") + ", karena item tersebut juga masuk daftar Top 10." : " Utamakan item yang ditandai latar merah, karena item tersebut juga masuk daftar Top 10.";
       setText("insightBody1", "Fokus Promosi Item Menurun: Arahkan program promosi ke item dengan tren penurunan penjualan." + overlapText);
@@ -745,9 +756,7 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
       const leaderValue = ranked.length ? ranked[ranked.length - 1][1] : 0;
       const weakest = ranked.find((item) => item[1] < leaderValue && item[1] >= leaderValue * 0.01);
       if (weakest) {
-        const tail = weakest[0] === "Mitra Semeru"
-          ? ", kanal aktif berikutnya dengan kinerja terendah setelah Tokopedia ditutup."
-          : ", kanal dengan omset tahun berjalan terendah di antara kanal yang masih aktif.";
+        const tail = ", kanal dengan omset tahun berjalan terendah di antara kanal yang masih aktif.";
         setText("insightTitle2", "Optimasi " + weakest[0]);
         setText("insightBody2", "Optimasi " + weakest[0] + ": Lakukan kampanye co-branding atau diskon khusus untuk menaikkan penetrasi pasar di " + weakest[0] + tail);
       }
@@ -760,14 +769,17 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
     function renderRiskAssessment(rows, monthSums, latestYm, latestYear) {
       const sentAll = rows.filter((row) => row.status === "DIKIRIM");
       const byPlatform = topSumAll(sentAll, (row) => platformShortName(row.platform));
-      const platformTotal = [...byPlatform.values()].reduce((sum, value) => sum + value, 0);
-      const shopee = byPlatform.get("Shopee") || 0;
-      const share = platformTotal ? Math.round((shopee / platformTotal) * 1000) / 10 : 0;
+      const rankedPlatforms = [...byPlatform.entries()].filter((item) => item[0] && item[1] > 0).sort((a, b) => b[1] - a[1]);
+      const platformTotal = rankedPlatforms.reduce((sum, item) => sum + item[1], 0);
+      const leader = rankedPlatforms[0];
+      const share = platformTotal && leader ? Math.round((leader[1] / platformTotal) * 1000) / 10 : 0;
       const gauge = document.getElementById("riskGauge");
       if (gauge) gauge.style.setProperty("--share", String(Math.max(0, Math.min(100, share))));
       const shareText = String(share).replace(".", ",");
+      const leaderName = leader ? leader[0] : "Kanal utama";
+      const secondName = rankedPlatforms[1] ? rankedPlatforms[1][0] : "toko lain";
       setText("riskShare", shareText + "%");
-      setText("riskPlatformText", "Shopee menguasai " + shareText + "% dari seluruh omset DIKIRIM. Ketergantungan ini adalah single point of failure: jika kanal ini terganggu, sebagian besar pendapatan berhenti. Diversifikasi ke Tokopedia dan platform lain mendesak, bukan opsional.");
+      setText("riskPlatformText", leaderName + " menguasai " + shareText + "% dari seluruh omset DIKIRIM. Ketergantungan ini adalah single point of failure: jika kanal ini terganggu, sebagian besar pendapatan berhenti. Diversifikasi ke " + secondName + " dan toko lain mendesak, bukan opsional.");
 
       const byItemYear = new Map();
       rows.forEach((row) => {
@@ -893,7 +905,8 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
               values: yearList.map((year) => Math.round(((years.get(year) || 0) / 1e9) * 1000) / 1000),
             }))
             .filter((item) => item.total > 0)
-            .sort((a, b) => b.total - a.total);
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 6);
           if (!platforms.length || !yearList.length) return;
           const palette = ["#0F766E", "#D4AF37", "#334155"];
           const platformYearGrowthPlugin = {
@@ -1028,6 +1041,7 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
             .map(([name, byYear]) => ({
               name,
               total: years.reduce((sum, year) => sum + ((byYear.get(year) || { all: 0 }).all), 0),
+              sentTotal: years.reduce((sum, year) => sum + ((byYear.get(year) || { sent: 0 }).sent), 0),
               sla: years.map((year) => {
                 const row = byYear.get(year);
                 if (!row || !row.all) return null;
@@ -1035,7 +1049,8 @@ window.PRESENTATION_DATA = {"source_file": "DATA E-COM.xlsx", "top_platform": {"
               }),
             }))
             .filter((item) => item.total > 0)
-            .sort((a, b) => b.total - a.total)
+            .sort((a, b) => b.sentTotal - a.sentTotal)
+            .slice(0, 5)
             .map((item, index) => ({ ...item, color: palette[item.name] || fallback[index % fallback.length] }));
           const slaTitle = document.getElementById("slaTitle");
           if (slaTitle) slaTitle.textContent = "SERVICE LEVEL INDICATOR (" + years[0] + "-" + years[years.length - 1] + ")";
