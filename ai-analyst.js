@@ -291,14 +291,15 @@
     return list.reduce((sum, row) => sum + row.amount, 0);
   }
 
-  function selectRows(rows, spec) {
+  function selectRows(rows, spec, unit) {
+    const measure = unit === "pcs" ? "qty" : "amount";
     return rows.filter((row) => {
       if (spec.years && spec.years.length && !spec.years.includes(row.year)) return false;
       if (spec.months && spec.months.length && !spec.months.includes(row.month)) return false;
       if (spec.store && row.store !== spec.store) return false;
       if (spec.brand && row.brand !== spec.brand) return false;
       if (spec.item && row.item !== spec.item) return false;
-      return row.amount > 0;
+      return Number(row[measure]) > 0;
     });
   }
 
@@ -334,36 +335,79 @@
     const asksItem = /(item|produk|barang|sku)/.test(text);
     const asksNumber = /(omset|penjualan|brutto|berapa|jumlah|nilai|total)/.test(text);
     const asksTrend = /(tren|trend|naik|turun)/.test(text);
+    const unit = /(\bpcs\b|pieces|kuantitas|\bqty\b|satuan\s+pcs)/.test(text) ? "pcs" : "rupiah";
     const lead = "Menurut Google Sheet hardware, ";
+    const monthName = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+    function formatValue(value) {
+      if (unit === "pcs") return Math.round(Number(value) || 0).toLocaleString("id-ID") + " Pcs";
+      return rupiah(value);
+    }
 
     function entitySum(mention, yearList) {
       const spec = { years: yearList, months };
-      if (mention.kind === "store") spec.store = mention.name;
-      if (mention.kind === "brand") spec.brand = mention.name;
-      if (mention.kind === "item") spec.item = mention.name;
-      return sumAmount(selectRows(rows, spec));
+      if (mention && mention.kind === "store") spec.store = mention.name;
+      if (mention && mention.kind === "brand") spec.brand = mention.name;
+      if (mention && mention.kind === "item") spec.item = mention.name;
+      const measure = unit === "pcs" ? "qty" : "amount";
+      return selectRows(rows, spec, unit).reduce((sum, row) => sum + Number(row[measure] || 0), 0);
     }
 
-    if (asksCompare && years.length >= 2) {
-      const [first, second] = years;
-      const subjects = mentions.length ? mentions : [{ name: "seluruh toko", kind: "all" }];
-      const lines = subjects.map((mention) => {
-        const spec = { months };
-        if (mention.kind === "store") spec.store = mention.name;
-        if (mention.kind === "brand") spec.brand = mention.name;
-        if (mention.kind === "item") spec.item = mention.name;
-        const a = sumAmount(selectRows(rows, { ...spec, years: [first] }));
-        const b = sumAmount(selectRows(rows, { ...spec, years: [second] }));
-        const change = a ? Math.round(((b - a) / a) * 1000) / 10 : null;
-        const changeText = change == null ? "" : " Perubahan " + (change > 0 ? "naik " : change < 0 ? "turun " : "sama ") + String(Math.abs(change)).replace(".", ",") + "%.";
-        return "omset DIKIRIM " + mention.name + " tahun " + first + " adalah " + rupiah(a) + " dan tahun " + second + " adalah " + rupiah(b) + "." + changeText;
+    function changePhrase(next, prev) {
+      if (!prev) return "";
+      const change = Math.round(((next - prev) / prev) * 1000) / 10;
+      const word = change > 0 ? "naik" : change < 0 ? "turun" : "sama";
+      return word + " " + String(Math.abs(change)).replace(".", ",") + "%";
+    }
+
+    function partialYearNote(mention, year) {
+      const spec = { years: [year] };
+      if (mention && mention.kind === "store") spec.store = mention.name;
+      if (mention && mention.kind === "brand") spec.brand = mention.name;
+      if (mention && mention.kind === "item") spec.item = mention.name;
+      const present = [...new Set(selectRows(rows, spec, unit).map((row) => row.month).filter(Boolean))].sort((a, b) => a - b);
+      if (!present.length || present[present.length - 1] >= 12) return "";
+      return " Data " + year + " baru sampai " + monthName[present[present.length - 1]] + ", jadi belum satu tahun penuh dan tidak setara dengan tahun yang sudah selesai.";
+    }
+
+    if ((asksCompare || years.length >= 2) && years.length >= 2) {
+      const yearList = [...years].sort((a, b) => a - b);
+      const subjects = mentions.length ? mentions : [{ name: "seluruh penjualan", kind: "all" }];
+      const noun = unit === "pcs" ? "penjualan berstatus DIKIRIM dalam satuan Pcs" : "omset DIKIRIM dalam Rupiah";
+      const blocks = subjects.map((mention) => {
+        const points = yearList.map((year) => ({ year, value: entitySum(mention, [year]) }));
+        const detail = points.map((point, index) => {
+          if (!index) return point.year + " sebesar " + formatValue(point.value);
+          const step = changePhrase(point.value, points[index - 1].value);
+          return point.year + " sebesar " + formatValue(point.value) + (step ? ", " + step + " dibanding " + points[index - 1].year : "");
+        }).join("; ");
+        const first = points[0];
+        const last = points[points.length - 1];
+        const peak = points.reduce((best, point) => (point.value > best.value ? point : best), points[0]);
+        const low = points.reduce((best, point) => (point.value < best.value ? point : best), points[0]);
+        const overall = changePhrase(last.value, first.value);
+        const note = partialYearNote(mention, last.year);
+        let reading = " Tahun tertinggi adalah " + peak.year + " (" + formatValue(peak.value) + ") dan tahun terendah adalah " + low.year + " (" + formatValue(low.value) + ").";
+        if (overall) reading += " Dari " + first.year + " ke " + last.year + " perubahannya " + overall + ".";
+        const measureName = unit === "pcs" ? "volume penjualan" : "nilai penjualan";
+        const direction = overall || "";
+        const implication = note
+          ? " Implikasi bisnis: jangan menyamakan " + last.year + " dengan tahun penuh sebelum periodenya selesai."
+          : direction.indexOf("turun") === 0
+            ? " Implikasi bisnis: " + measureName + " menurun, sehingga permintaan, stok, dan kontribusi toko perlu ditinjau."
+            : direction.indexOf("naik") === 0
+              ? " Implikasi bisnis: ada pertumbuhan, sehingga pasokan dan kapasitas pengiriman perlu dijaga."
+              : " Implikasi bisnis: angkanya stabil, sehingga prioritasnya mempertahankan tingkat penjualan ini.";
+        const cause = asksWhy ? " Data sheet hanya berisi angka penjualan, belum cukup untuk menentukan penyebabnya." : "";
+        return noun + " " + mention.name + " adalah " + detail + "." + reading + note + implication + cause;
       });
-      return lead + lines.join(" ") + (asksWhy ? " " + "Data sheet hanya berisi angka penjualan, belum cukup untuk menentukan penyebabnya." : "");
+      return lead + blocks.join(" ");
     }
 
     if (asksCompare && mentions.length >= 2) {
-      const lines = mentions.slice(0, 3).map((mention) => mention.name + " " + rupiah(entitySum(mention, years.length === 1 ? years : [])) + scopePhrase(years.length === 1 ? years : [], months));
-      return lead + "perbandingan omset DIKIRIM: " + lines.join("; ") + ".";
+      const noun = unit === "pcs" ? "penjualan dalam satuan Pcs" : "omset DIKIRIM";
+      const lines = mentions.slice(0, 3).map((mention) => mention.name + " " + formatValue(entitySum(mention, years.length === 1 ? years : [])) + scopePhrase(years.length === 1 ? years : [], months));
+      return lead + "perbandingan " + noun + ": " + lines.join("; ") + ".";
     }
 
     if (asksTop) {
@@ -377,13 +421,16 @@
 
     if (!asksWhy && mentions.length === 1 && (asksNumber || asksTrend || years.length || months.length)) {
       const mention = mentions[0];
+      const noun = unit === "pcs" ? "penjualan DIKIRIM dalam satuan Pcs" : "omset DIKIRIM";
+      const basis = unit === "pcs" ? " Angka ini adalah jumlah Pcs pesanan berstatus DIKIRIM." : " Angka ini adalah BRUTTO pesanan berstatus DIKIRIM.";
       if (years.length === 1 || months.length) {
         const value = entitySum(mention, years.length === 1 ? years : []);
-        return lead + "omset DIKIRIM " + mention.name + scopePhrase(years.length === 1 ? years : [], months) + " adalah " + rupiah(value) + ". Angka ini adalah BRUTTO pesanan berstatus DIKIRIM.";
+        return lead + noun + " " + mention.name + scopePhrase(years.length === 1 ? years : [], months) + " adalah " + formatValue(value) + "." + basis;
       }
-      const byYear = rankBy(selectRows(rows, mention.kind === "store" ? { store: mention.name } : mention.kind === "brand" ? { brand: mention.name } : { item: mention.name }), (row) => String(row.year), 12)
-        .sort((a, b) => Number(a[0]) - Number(b[0]));
-      return lead + "omset DIKIRIM " + mention.name + " adalah " + rupiah(entitySum(mention, [])) + ". Rincian tahun: " + byYear.map(([year, value]) => year + " " + rupiah(value)).join("; ") + ".";
+      const scope = mention.kind === "store" ? { store: mention.name } : mention.kind === "brand" ? { brand: mention.name } : { item: mention.name };
+      const byYear = [...new Set(selectRows(rows, scope, unit).map((row) => row.year))].filter(Boolean).sort((a, b) => a - b)
+        .map((year) => [String(year), entitySum(mention, [year])]);
+      return lead + noun + " " + mention.name + " adalah " + formatValue(entitySum(mention, [])) + ". Rincian tahun: " + byYear.map(([year, value]) => year + " " + formatValue(value)).join("; ") + ".";
     }
 
     if (!mentions.length && years.length === 1 && (asksNumber || asksTrend || asksStore || asksBrand || asksItem)) {
