@@ -290,6 +290,73 @@ html { scroll-behavior: smooth; scroll-padding-top: 6.5rem; }
     .risk-dead td { background: #FEE2E2; color: #7F1D1D; }
     .risk-chart { height: 280px; }
 
+    .ai-brief + .ai-brief { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid rgba(15, 39, 68, 0.08); }
+    .ai-kicker {
+      color: #8A6D1F;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+    .ai-title {
+      margin-top: 0.35rem;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 1.85rem;
+      line-height: 1.15;
+      color: #0F172A;
+    }
+    .ai-cols {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .ai-col {
+      border: 1px solid rgba(15, 39, 68, 0.08);
+      border-top: 3px solid #0F766E;
+      border-radius: 1rem;
+      background: #fff;
+      padding: 0.85rem 1rem 0.95rem;
+    }
+    .ai-col-label {
+      color: #64748B;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .ai-col-value {
+      margin-top: 0.3rem;
+      color: #0F172A;
+      font-size: 1.2rem;
+      font-weight: 650;
+      line-height: 1.25;
+    }
+    .ai-col-note { margin-top: 0.35rem; color: #475569; font-size: 0.8rem; line-height: 1.35; }
+    .ai-points { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.55rem; }
+    .ai-points li {
+      display: grid;
+      grid-template-columns: minmax(8.5rem, 11.5rem) 1fr;
+      gap: 0.75rem;
+      align-items: start;
+      padding: 0.7rem 0.9rem;
+      border: 1px solid rgba(15, 39, 68, 0.06);
+      border-radius: 0.9rem;
+      background: rgba(255, 255, 255, 0.76);
+    }
+    .ai-points strong {
+      color: #0F766E;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .ai-points span { color: #334155; line-height: 1.45; }
+    .ai-points .ai-point-plain { display: block; color: #334155; line-height: 1.45; }
+    @media (max-width: 640px) {
+      .ai-points li { grid-template-columns: 1fr; gap: 0.2rem; }
+    }
+
     ::-webkit-scrollbar { width: 10px; }
     ::-webkit-scrollbar-track { background: #F4F7FB; }
     ::-webkit-scrollbar-thumb {
